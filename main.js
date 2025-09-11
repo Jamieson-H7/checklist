@@ -14,13 +14,13 @@ checkedList.id = 'checked-list';
 checkedList.style.marginTop = '8px';
 checkedList.style.paddingLeft = '0';
 checkedList.style.listStyleType = 'none';
-
-// Start hidden
-checkedList.style.display = 'none';
+checkedList.style.display = 'none'; // Start hidden
+checkedList.style.overflow = 'auto';
+checkedList.style.minHeight = '24px';
 
 // Toggle checked list visibility on label click
 checkedLabel.addEventListener('click', function() {
-    checkedList.style.display = (checkedList.style.display === 'none') ? 'block' : 'none';
+    checkedList.style.display = (checkedList.style.display === 'none' || checkedList.style.display === '') ? 'block' : 'none';
 });
 
 input.insertAdjacentElement('afterend', checkedList);
@@ -32,18 +32,23 @@ const set = window.firebaseSet;
 const onValue = window.firebaseOnValue;
 
 // Helper to add a checklist item
-function addChecklistItem(item, checked = false, skipSave = false) {
+function addChecklistItem(item, checked = false, skipSave = false, dueDate = null, created = null) {
     if (!item) return;
     // Prevent duplicates
     if (document.getElementById(item)) return;
     if (document.getElementById('checked-' + item)) return;
 
     if (checked) {
-        addCheckedListItem(item, skipSave);
+        addCheckedListItem(item, skipSave, dueDate, created);
         return;
     }
 
     const li = document.createElement('li');
+    const createdTimestamp = created ? Number(created) : Date.now();
+    li.setAttribute('data-created', createdTimestamp);
+    // Show date created on hover (only on label)
+    // li.title = 'Created: ' + formatCreatedDate(createdTimestamp); // remove from li
+
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.id = item;
@@ -52,9 +57,152 @@ function addChecklistItem(item, checked = false, skipSave = false) {
     const label = document.createElement('label');
     label.htmlFor = item;
     label.appendChild(document.createTextNode(item));
+    label.title = 'Created: ' + formatCreatedDate(createdTimestamp);
 
+    // Due date display (now only as tooltip on progress bar)
+    // Remove dueDateSpan from visible UI
+    // Progress bar
+    const progressBar = document.createElement('div');
+    progressBar.className = 'due-progress-bar';
+    progressBar.style.height = '8px';
+    progressBar.style.width = '60px'; // half as wide
+    progressBar.style.background = '#eee';
+    progressBar.style.borderRadius = '4px';
+    progressBar.style.marginLeft = '10px';
+    progressBar.style.marginTop = '4px';
+    progressBar.style.overflow = 'hidden';
+    progressBar.style.display = dueDate ? 'inline-block' : 'none';
+    progressBar.style.position = 'relative';
+    if (dueDate) progressBar.title = formatDueDate(dueDate);
+    const progressFill = document.createElement('div');
+    progressFill.style.height = '100%';
+    progressFill.style.background = '#4caf50';
+    progressFill.style.width = '0%';
+    progressFill.style.transition = 'width 0.3s';
+    progressFill.style.position = 'absolute';
+    progressFill.style.top = '0';
+    progressFill.style.right = '0';
+    progressBar.appendChild(progressFill);
+    // Helper to update progress
+    function updateProgressBar() {
+        if (!dueDate) {
+            progressBar.style.display = 'none';
+            progressBar.title = '';
+            return;
+        }
+        const now = Date.now();
+        const due = new Date(dueDate).getTime();
+        const total = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
+        const left = due - now;
+        let percent = 100 * (left / total);
+        if (percent < 0) percent = 0;
+        if (percent > 100) percent = 100;
+        // Deplete towards the right
+        progressFill.style.width = percent + '%';
+        progressFill.style.left = 'auto';
+        progressFill.style.right = '0';
+        progressBar.style.display = 'inline-block';
+        progressBar.title = formatDueDate(dueDate);
+        if (percent === 0) progressFill.style.background = '#f44336';
+        else if (percent < 30) progressFill.style.background = '#ff9800';
+        else progressFill.style.background = '#4caf50';
+    }
+    if (dueDate) updateProgressBar();
+
+    // Set Due Date button
+    const setDueBtn = document.createElement('button');
+    setDueBtn.innerHTML = '📅';
+    setDueBtn.title = 'Set Due Date';
+    setDueBtn.type = 'button';
+    setDueBtn.style.marginLeft = '10px';
+
+    // Popup menu for due date
+    let popup = null;
+    setDueBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Remove any existing popup
+        if (popup) popup.remove();
+        document.querySelectorAll('.due-date-popup').forEach(el => el.remove());
+        popup = document.createElement('div');
+        popup.className = 'due-date-popup';
+        popup.style.position = 'absolute';
+        popup.style.background = '#fff';
+        popup.style.border = '1px solid #ccc';
+        popup.style.padding = '8px';
+        popup.style.borderRadius = '6px';
+        popup.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+        popup.style.zIndex = 2000;
+        // Position popup below the button
+        const rect = setDueBtn.getBoundingClientRect();
+        popup.style.left = (window.scrollX + rect.left) + 'px';
+        popup.style.top = (window.scrollY + rect.bottom + 4) + 'px';
+        // Days input
+        const daysInput = document.createElement('input');
+        daysInput.type = 'number';
+        daysInput.min = '0';
+        daysInput.placeholder = 'Days until due';
+        daysInput.style.width = '110px';
+        daysInput.style.marginRight = '8px';
+        // Time input
+        const timeInput = document.createElement('input');
+        timeInput.type = 'time';
+        timeInput.step = 1800;
+        timeInput.style.marginRight = '8px';
+        // Confirm button
+        const confirmBtn = document.createElement('button');
+        confirmBtn.textContent = 'Set';
+        confirmBtn.type = 'button';
+        confirmBtn.style.marginRight = '4px';
+        function setDueDateFromPopup() {
+            const days = parseInt(daysInput.value, 10);
+            const time = timeInput.value;
+            if (!isNaN(days) && time) {
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                const due = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+                const [hh, mm] = time.split(':');
+                due.setHours(Number(hh), Number(mm), 0, 0);
+                const pad = n => n.toString().padStart(2, '0');
+                const isoLocal = `${due.getFullYear()}-${pad(due.getMonth()+1)}-${pad(due.getDate())}T${pad(due.getHours())}:${pad(due.getMinutes())}`;
+                li.setAttribute('data-due', isoLocal);
+                dueDate = isoLocal;
+                updateProgressBar();
+                saveChecklistState();
+                popup.remove();
+            }
+        }
+        confirmBtn.addEventListener('click', setDueDateFromPopup);
+        daysInput.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Enter') setDueDateFromPopup();
+        });
+        timeInput.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Enter') setDueDateFromPopup();
+        });
+        // Close popup on click outside
+        setTimeout(() => {
+            document.addEventListener('mousedown', function handler(ev) {
+                if (!popup.contains(ev.target) && ev.target !== setDueBtn) {
+                    popup.remove();
+                    document.removeEventListener('mousedown', handler);
+                }
+            });
+        }, 0);
+        popup.appendChild(daysInput);
+        popup.appendChild(timeInput);
+        popup.appendChild(confirmBtn);
+        document.body.appendChild(popup);
+    });
+
+    // If dueDate exists, set data-due
+    if (dueDate) {
+        li.setAttribute('data-due', dueDate);
+    }
+
+    // Remove inline daysInput, timeInput, setDueBtn from li
     li.appendChild(checkbox);
     li.appendChild(label);
+    li.appendChild(progressBar);
+    li.appendChild(setDueBtn);
 
     // Add right-click context menu for delete
     li.addEventListener('contextmenu', function(e) {
@@ -91,7 +239,7 @@ function addChecklistItem(item, checked = false, skipSave = false) {
     // Listen for checking
     checkbox.addEventListener('change', function() {
         if (checkbox.checked) {
-            addCheckedListItem(item);
+            addCheckedListItem(item, false, li.getAttribute('data-due') || null);
             li.remove();
         }
         saveChecklistState();
@@ -103,10 +251,14 @@ function addChecklistItem(item, checked = false, skipSave = false) {
 }
 
 // Helper to add an item to the checked items list
-function addCheckedListItem(item, skipSave = false) {
+function addCheckedListItem(item, skipSave = false, dueDate = null, created = null) {
     if (document.getElementById('checked-' + item)) return;
     const li = document.createElement('li');
+    const createdTimestamp = created ? Number(created) : Date.now();
     li.id = 'checked-' + item;
+    li.setAttribute('data-created', createdTimestamp);
+    // Show date created on hover (only on label)
+    // li.title = 'Created: ' + formatCreatedDate(createdTimestamp); // remove from li
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
@@ -116,9 +268,151 @@ function addCheckedListItem(item, skipSave = false) {
     const label = document.createElement('label');
     label.htmlFor = 'checkedbox-' + item;
     label.appendChild(document.createTextNode(item));
+    label.title = 'Created: ' + formatCreatedDate(createdTimestamp);
 
+    // Due date display (now only as tooltip on progress bar)
+    // Remove dueDateSpan from visible UI
+    // Progress bar
+    const progressBar = document.createElement('div');
+    progressBar.className = 'due-progress-bar';
+    progressBar.style.height = '8px';
+    progressBar.style.width = '60px'; // half as wide
+    progressBar.style.background = '#eee';
+    progressBar.style.borderRadius = '4px';
+    progressBar.style.marginLeft = '10px';
+    progressBar.style.marginTop = '4px';
+    progressBar.style.overflow = 'hidden';
+    progressBar.style.display = dueDate ? 'inline-block' : 'none';
+    progressBar.style.position = 'relative';
+    if (dueDate) progressBar.title = formatDueDate(dueDate);
+    const progressFill = document.createElement('div');
+    progressFill.style.height = '100%';
+    progressFill.style.background = '#4caf50';
+    progressFill.style.width = '0%';
+    progressFill.style.transition = 'width 0.3s';
+    progressFill.style.position = 'absolute';
+    progressFill.style.top = '0';
+    progressFill.style.right = '0';
+    progressBar.appendChild(progressFill);
+    function updateProgressBar() {
+        if (!dueDate) {
+            progressBar.style.display = 'none';
+            progressBar.title = '';
+            return;
+        }
+        const now = Date.now();
+        const due = new Date(dueDate).getTime();
+        const total = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
+        const left = due - now;
+        let percent = 100 * (left / total);
+        if (percent < 0) percent = 0;
+        if (percent > 100) percent = 100;
+        // Deplete towards the right
+        progressFill.style.width = percent + '%';
+        progressFill.style.left = 'auto';
+        progressFill.style.right = '0';
+        progressBar.style.display = 'inline-block';
+        progressBar.title = formatDueDate(dueDate);
+        if (percent === 0) progressFill.style.background = '#f44336';
+        else if (percent < 30) progressFill.style.background = '#ff9800';
+        else progressFill.style.background = '#4caf50';
+    }
+    if (dueDate) updateProgressBar();
+
+    // Set Due Date button
+    const setDueBtn = document.createElement('button');
+    setDueBtn.innerHTML = '📅';
+    setDueBtn.title = 'Set Due Date';
+    setDueBtn.type = 'button';
+    setDueBtn.style.marginLeft = '10px';
+
+    // Popup menu for due date
+    let popup = null;
+    setDueBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Remove any existing popup
+        if (popup) popup.remove();
+        document.querySelectorAll('.due-date-popup').forEach(el => el.remove());
+        popup = document.createElement('div');
+        popup.className = 'due-date-popup';
+        popup.style.position = 'absolute';
+        popup.style.background = '#fff';
+        popup.style.border = '1px solid #ccc';
+        popup.style.padding = '8px';
+        popup.style.borderRadius = '6px';
+        popup.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+        popup.style.zIndex = 2000;
+        // Position popup below the button
+        const rect = setDueBtn.getBoundingClientRect();
+        popup.style.left = (window.scrollX + rect.left) + 'px';
+        popup.style.top = (window.scrollY + rect.bottom + 4) + 'px';
+        // Days input
+        const daysInput = document.createElement('input');
+        daysInput.type = 'number';
+        daysInput.min = '0';
+        daysInput.placeholder = 'Days until due';
+        daysInput.style.width = '110px';
+        daysInput.style.marginRight = '8px';
+        // Time input
+        const timeInput = document.createElement('input');
+        timeInput.type = 'time';
+        timeInput.step = 1800;
+        timeInput.style.marginRight = '8px';
+        // Confirm button
+        const confirmBtn = document.createElement('button');
+        confirmBtn.textContent = 'Set';
+        confirmBtn.type = 'button';
+        confirmBtn.style.marginRight = '4px';
+        function setDueDateFromPopup() {
+            const days = parseInt(daysInput.value, 10);
+            const time = timeInput.value;
+            if (!isNaN(days) && time) {
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                const due = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+                const [hh, mm] = time.split(':');
+                due.setHours(Number(hh), Number(mm), 0, 0);
+                const pad = n => n.toString().padStart(2, '0');
+                const isoLocal = `${due.getFullYear()}-${pad(due.getMonth()+1)}-${pad(due.getDate())}T${pad(due.getHours())}:${pad(due.getMinutes())}`;
+                li.setAttribute('data-due', isoLocal);
+                dueDate = isoLocal;
+                updateProgressBar();
+                saveChecklistState();
+                popup.remove();
+            }
+        }
+        confirmBtn.addEventListener('click', setDueDateFromPopup);
+        daysInput.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Enter') setDueDateFromPopup();
+        });
+        timeInput.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Enter') setDueDateFromPopup();
+        });
+        // Close popup on click outside
+        setTimeout(() => {
+            document.addEventListener('mousedown', function handler(ev) {
+                if (!popup.contains(ev.target) && ev.target !== setDueBtn) {
+                    popup.remove();
+                    document.removeEventListener('mousedown', handler);
+                }
+            });
+        }, 0);
+        popup.appendChild(daysInput);
+        popup.appendChild(timeInput);
+        popup.appendChild(confirmBtn);
+        document.body.appendChild(popup);
+    });
+
+    // If dueDate exists, set data-due
+    if (dueDate) {
+        li.setAttribute('data-due', dueDate);
+    }
+
+    // Remove inline daysInput, timeInput, setDueBtn from li
     li.appendChild(checkbox);
     li.appendChild(label);
+    li.appendChild(progressBar);
+    li.appendChild(setDueBtn);
 
     // Add right-click context menu for delete
     li.addEventListener('contextmenu', function(e) {
@@ -156,7 +450,7 @@ function addCheckedListItem(item, skipSave = false) {
     checkbox.addEventListener('change', function() {
         if (!checkbox.checked) {
             li.remove();
-            addChecklistItem(item, false, true); // skipSave true to avoid double save
+            addChecklistItem(item, false, true, li.getAttribute('data-due') || null);
             saveChecklistState();
         } else {
             saveChecklistState();
@@ -176,27 +470,64 @@ input.addEventListener('keydown', function(e) {
     }
 });
 
+// Helper function to format due date for display
+function formatDueDate(dt) {
+    if (!dt) return '';
+    // dt is in 'YYYY-MM-DDTHH:MM' format (local time)
+    const [date, time] = dt.split('T');
+    if (!date || !time) return dt;
+    const [year, month, day] = date.split('-');
+    const [hour, minute] = time.split(':');
+    const d = new Date(Number(year), Number(month)-1, Number(day), Number(hour), Number(minute));
+    if (isNaN(d.getTime())) return dt;
+    const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    return d.toLocaleString(undefined, options);
+}
+
+// Helper to format created date for tooltip
+function formatCreatedDate(ts) {
+    const d = new Date(Number(ts));
+    if (isNaN(d.getTime())) return '';
+    const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    return d.toLocaleString(undefined, options);
+}
+
 // Save checklist state to Firebase (items and checked state)
 function saveChecklistState() {
     const state = {};
-    // Unchecked items
     checklist.querySelectorAll('li').forEach(li => {
         const checkbox = li.querySelector('input[type="checkbox"]');
-        const label = li.querySelector('label');
+        // Only get the label that is a sibling of the checkbox
+        let label = null;
+        if (checkbox) {
+            label = checkbox.nextSibling;
+            // If nextSibling is a text node, skip to nextElementSibling
+            if (label && label.nodeType !== 1) label = checkbox.nextElementSibling;
+        }
+        const dueDate = li.getAttribute('data-due') || null;
+        const created = li.getAttribute('data-created') || Date.now();
         state[checkbox.id] = {
             checked: false,
-            label: label.textContent
+            label: label && label.textContent ? label.textContent : '',
+            dueDate: dueDate,
+            created: created
         };
     });
-    // Checked items
     checkedList.querySelectorAll('li').forEach(li => {
         const checkbox = li.querySelector('input[type="checkbox"]');
-        const label = li.querySelector('label');
-        // Remove 'checked-' prefix for id
+        let label = null;
+        if (checkbox) {
+            label = checkbox.nextSibling;
+            if (label && label.nodeType !== 1) label = checkbox.nextElementSibling;
+        }
+        const dueDate = li.getAttribute('data-due') || null;
+        const created = li.getAttribute('data-created') || Date.now();
         const itemId = li.id.replace('checked-', '');
         state[itemId] = {
             checked: true,
-            label: label.textContent
+            label: label && label.textContent ? label.textContent : '',
+            dueDate: dueDate,
+            created: created
         };
     });
     set(ref(db, 'checklist'), state);
@@ -207,24 +538,66 @@ onValue(ref(db, 'checklist'), snapshot => {
     const state = snapshot.val() || {};
     checklist.innerHTML = '';
     checkedList.innerHTML = '';
+    let hasChecked = false;
     Object.keys(state).forEach(key => {
-        addChecklistItem(key, state[key].checked, true);
+        if (state[key].checked) hasChecked = true;
+        addChecklistItem(key, state[key].checked, true, state[key].dueDate || null, state[key].created || null);
     });
+    // If there are checked items, show the checked list by default
+    if (hasChecked) {
+        checkedList.style.display = 'block';
+    } else {
+        checkedList.style.display = 'none';
+    }
 });
 
-// Add event listeners to checkboxes (for legacy support)
-checklist.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-    checkbox.addEventListener('change', function() {
-        const li = checkbox.closest('li');
-        if (checkbox.checked) {
-            // Move to checked list
-            addCheckedListItem(li.id);
-            li.remove();
-        } else {
-            // Move back to checklist
-            addChecklistItem(li.id, false);
-            li.remove();
-        }
-        saveChecklistState();
+// Add sort buttons
+const sortContainer = document.createElement('div');
+sortContainer.style.margin = '16px 0';
+
+const sortCreatedBtn = document.createElement('button');
+sortCreatedBtn.textContent = 'Sort by Created';
+sortCreatedBtn.type = 'button';
+sortCreatedBtn.style.marginRight = '8px';
+
+const sortDueBtn = document.createElement('button');
+sortDueBtn.textContent = 'Sort by Due Date';
+sortDueBtn.type = 'button';
+
+sortContainer.appendChild(sortCreatedBtn);
+sortContainer.appendChild(sortDueBtn);
+
+checklist.parentNode.insertBefore(sortContainer, checklist);
+
+// Sorting logic
+function sortListByCreated(list) {
+    const items = Array.from(list.children);
+    items.sort((a, b) => {
+        return Number(a.getAttribute('data-created')) - Number(b.getAttribute('data-created'));
     });
+    items.forEach(item => list.appendChild(item));
+}
+
+function sortListByDueDate(list) {
+    const items = Array.from(list.children);
+    items.sort((a, b) => {
+        const aDate = a.getAttribute('data-due') || '';
+        const bDate = b.getAttribute('data-due') || '';
+        if (!aDate && !bDate) return 0;
+        if (!aDate) return 1;
+        if (!bDate) return -1;
+        return aDate.localeCompare(bDate);
+    });
+    items.forEach(item => list.appendChild(item));
+}
+
+sortCreatedBtn.addEventListener('click', function() {
+    sortListByCreated(checklist);
+    sortListByCreated(checkedList);
 });
+sortDueBtn.addEventListener('click', function() {
+    sortListByDueDate(checklist);
+    sortListByDueDate(checkedList);
+});
+
+// Remove legacy event listeners at the end
