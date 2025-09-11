@@ -31,8 +31,8 @@ const ref = window.firebaseRef;
 const set = window.firebaseSet;
 const onValue = window.firebaseOnValue;
 
-// Helper to add a checklist item
-function addChecklistItem(item, checked = false, skipSave = false, dueDate = null, created = null) {
+// Helper to add a checklist item to the main list (unchecked)
+function addChecklistItem(item, checked = false, skipSave = false, dueDate = null, created = null, autoOpenDueDate = false) {
     if (!item) return;
     // Prevent duplicates
     if (document.getElementById(item)) return;
@@ -118,8 +118,8 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
 
     // Popup menu for due date
     let popup = null;
-    setDueBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
+    // Refactored: openDueDatePopup now takes li and setDueBtn as arguments
+    function openDueDatePopup(targetLi, targetBtn) {
         // Remove any existing popup
         if (popup) popup.remove();
         document.querySelectorAll('.due-date-popup').forEach(el => el.remove());
@@ -132,8 +132,8 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
         popup.style.borderRadius = '6px';
         popup.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
         popup.style.zIndex = 2000;
-        // Position popup below the button
-        const rect = setDueBtn.getBoundingClientRect();
+        // Position popup below the button, relative to li
+        const rect = targetLi.getBoundingClientRect();
         popup.style.left = (window.scrollX + rect.left) + 'px';
         popup.style.top = (window.scrollY + rect.bottom + 4) + 'px';
         // Days input
@@ -164,8 +164,8 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
                 due.setHours(Number(hh), Number(mm), 0, 0);
                 const pad = n => n.toString().padStart(2, '0');
                 const isoLocal = `${due.getFullYear()}-${pad(due.getMonth()+1)}-${pad(due.getDate())}T${pad(due.getHours())}:${pad(due.getMinutes())}`;
-                li.setAttribute('data-due', isoLocal);
-                dueDate = isoLocal;
+                targetLi.setAttribute('data-due', isoLocal);
+                dueDate = isoLocal; // update the variable for this checklist item
                 updateProgressBar();
                 saveChecklistState();
                 popup.remove();
@@ -181,7 +181,7 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
         // Close popup on click outside
         setTimeout(() => {
             document.addEventListener('mousedown', function handler(ev) {
-                if (!popup.contains(ev.target) && ev.target !== setDueBtn) {
+                if (!popup.contains(ev.target) && ev.target !== targetBtn) {
                     popup.remove();
                     document.removeEventListener('mousedown', handler);
                 }
@@ -191,6 +191,12 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
         popup.appendChild(timeInput);
         popup.appendChild(confirmBtn);
         document.body.appendChild(popup);
+        // Focus the days input
+        daysInput.focus();
+    }
+    setDueBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openDueDatePopup(li, setDueBtn);
     });
 
     // If dueDate exists, set data-due
@@ -246,6 +252,11 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
     });
 
     checklist.appendChild(li);
+
+    // If requested, open the due date popup and focus input
+    if (autoOpenDueDate) {
+        setTimeout(() => openDueDatePopup(li, setDueBtn), 0);
+    }
 
     if (!skipSave) saveChecklistState();
 }
@@ -375,7 +386,7 @@ function addCheckedListItem(item, skipSave = false, dueDate = null, created = nu
                 const pad = n => n.toString().padStart(2, '0');
                 const isoLocal = `${due.getFullYear()}-${pad(due.getMonth()+1)}-${pad(due.getDate())}T${pad(due.getHours())}:${pad(due.getMinutes())}`;
                 li.setAttribute('data-due', isoLocal);
-                dueDate = isoLocal;
+                dueDate = isoLocal; // update outer variable
                 updateProgressBar();
                 saveChecklistState();
                 popup.remove();
@@ -465,12 +476,12 @@ function addCheckedListItem(item, skipSave = false, dueDate = null, created = nu
 // Listen for Enter key to add new item
 input.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && input.value.trim()) {
-        addChecklistItem(input.value.trim());
+        addChecklistItem(input.value.trim(), false, false, null, null, true); // autoOpenDueDate = true
         input.value = '';
     }
 });
 
-// Helper function to format due date for display
+// Helper function to format due date for display as a readable string
 function formatDueDate(dt) {
     if (!dt) return '';
     // dt is in 'YYYY-MM-DDTHH:MM' format (local time)
@@ -484,7 +495,7 @@ function formatDueDate(dt) {
     return d.toLocaleString(undefined, options);
 }
 
-// Helper to format created date for tooltip
+// Helper to format created date for tooltip display
 function formatCreatedDate(ts) {
     const d = new Date(Number(ts));
     if (isNaN(d.getTime())) return '';
@@ -533,7 +544,7 @@ function saveChecklistState() {
     set(ref(db, 'checklist'), state);
 }
 
-// Load checklist state from Firebase (items and checked state)
+// Load checklist state from Firebase and render items
 onValue(ref(db, 'checklist'), snapshot => {
     const state = snapshot.val() || {};
     checklist.innerHTML = '';
@@ -570,6 +581,8 @@ sortContainer.appendChild(sortDueBtn);
 checklist.parentNode.insertBefore(sortContainer, checklist);
 
 // Sorting logic
+
+// Sort a list by the created timestamp (ascending)
 function sortListByCreated(list) {
     const items = Array.from(list.children);
     items.sort((a, b) => {
@@ -578,6 +591,7 @@ function sortListByCreated(list) {
     items.forEach(item => list.appendChild(item));
 }
 
+// Sort a list by due date (ascending, empty due dates last)
 function sortListByDueDate(list) {
     const items = Array.from(list.children);
     items.sort((a, b) => {
