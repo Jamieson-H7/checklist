@@ -46,6 +46,7 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
     const li = document.createElement('li');
     const createdTimestamp = created ? Number(created) : Date.now();
     li.setAttribute('data-created', createdTimestamp);
+    li.setAttribute('auto-due', autoOpenDueDate ? '1' : '0');
     // Show date created on hover (only on label)
     // li.title = 'Created: ' + formatCreatedDate(createdTimestamp); // remove from li
 
@@ -53,6 +54,16 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
     checkbox.type = 'checkbox';
     checkbox.id = item;
     checkbox.checked = checked;
+
+    const detailsContainer = document.createElement('div');
+    detailsContainer.style.display = 'inline-grid';
+    detailsContainer.style.width = '100%';
+    detailsContainer.style.gridTemplateColumns = '1fr 8fr 2fr 1fr'; // checkbox, label, progress bar, button
+    detailsContainer.style.columnGap = '8px';
+    detailsContainer.style.justifyContent = 'center';
+    detailsContainer.style.alignItems = 'center';
+
+    // Label
 
     const label = document.createElement('label');
     label.htmlFor = item;
@@ -132,8 +143,8 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
         popup.style.borderRadius = '6px';
         popup.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
         popup.style.zIndex = 2000;
-        // Position popup below the button, relative to li
-        const rect = targetLi.getBoundingClientRect();
+        // Position popup below the button, relative to the button (fix)
+        const rect = targetBtn.getBoundingClientRect();
         popup.style.left = (window.scrollX + rect.left) + 'px';
         popup.style.top = (window.scrollY + rect.bottom + 4) + 'px';
         // Days input
@@ -165,7 +176,9 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
                 const pad = n => n.toString().padStart(2, '0');
                 const isoLocal = `${due.getFullYear()}-${pad(due.getMonth()+1)}-${pad(due.getDate())}T${pad(due.getHours())}:${pad(due.getMinutes())}`;
                 targetLi.setAttribute('data-due', isoLocal);
-                dueDate = isoLocal; // update the variable for this checklist item
+                targetLi.setAttribute('auto-due', '0'); // reset
+                // update progress bar for this item
+                dueDate = isoLocal;
                 updateProgressBar();
                 saveChecklistState();
                 popup.remove();
@@ -205,10 +218,11 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
     }
 
     // Remove inline daysInput, timeInput, setDueBtn from li
-    li.appendChild(checkbox);
-    li.appendChild(label);
-    li.appendChild(progressBar);
-    li.appendChild(setDueBtn);
+    li.appendChild(detailsContainer);
+    detailsContainer.appendChild(checkbox);
+    detailsContainer.appendChild(label);
+    detailsContainer.appendChild(progressBar);
+    detailsContainer.appendChild(setDueBtn);
 
     // Add right-click context menu for delete
     li.addEventListener('contextmenu', function(e) {
@@ -517,11 +531,13 @@ function saveChecklistState() {
         }
         const dueDate = li.getAttribute('data-due') || null;
         const created = li.getAttribute('data-created') || Date.now();
+        const autoOpenDueDate = li.getAttribute('auto-due') === '1' ? true : false;
         state[checkbox.id] = {
             checked: false,
             label: label && label.textContent ? label.textContent : '',
             dueDate: dueDate,
-            created: created
+            created: created,
+            autoOpenDueDate: autoOpenDueDate
         };
     });
     checkedList.querySelectorAll('li').forEach(li => {
@@ -534,11 +550,13 @@ function saveChecklistState() {
         const dueDate = li.getAttribute('data-due') || null;
         const created = li.getAttribute('data-created') || Date.now();
         const itemId = li.id.replace('checked-', '');
+        const autoOpenDueDate = li.getAttribute('auto-due') === '1' ? true : false;
         state[itemId] = {
             checked: true,
             label: label && label.textContent ? label.textContent : '',
             dueDate: dueDate,
-            created: created
+            created: created,
+            autoOpenDueDate: autoOpenDueDate
         };
     });
     set(ref(db, 'checklist'), state);
@@ -552,7 +570,7 @@ onValue(ref(db, 'checklist'), snapshot => {
     let hasChecked = false;
     Object.keys(state).forEach(key => {
         if (state[key].checked) hasChecked = true;
-        addChecklistItem(key, state[key].checked, true, state[key].dueDate || null, state[key].created || null);
+        addChecklistItem(key, state[key].checked, true, state[key].dueDate || null, state[key].created || null,state[key].autoOpenDueDate || false);
     });
     // If there are checked items, show the checked list by default
     if (hasChecked) {
@@ -560,6 +578,8 @@ onValue(ref(db, 'checklist'), snapshot => {
     } else {
         checkedList.style.display = 'none';
     }
+    sortListByDueDate(checklist);
+    sortListByDueDate(checkedList);
 });
 
 // Add sort buttons
@@ -578,7 +598,7 @@ sortDueBtn.type = 'button';
 sortContainer.appendChild(sortCreatedBtn);
 sortContainer.appendChild(sortDueBtn);
 
-checklist.parentNode.insertBefore(sortContainer, checklist);
+checklist.parentNode.parentNode.insertBefore(sortContainer, checklist.parentNode);
 
 // Sorting logic
 
