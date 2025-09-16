@@ -1,6 +1,7 @@
 ul#checklist {
     list-style-type: none;
     padding-left: 0;
+    color: black;
 }
 
 #new-item-input {
@@ -11,4 +12,10 @@ ul#checklist {
     border: 1px solid #ccc;
     border-radius: 4px;
     box-sizing: border-box;
+}
+
+body{
+    background-color: #1b1b1d;
+    color: white;
+    font-family: Arial, sans-serif
 }
