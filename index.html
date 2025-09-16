@@ -5,15 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Checklist</title>
     <link rel="stylesheet" href="styles.css">
+    <link id="favicon" rel="icon" href="/favicon-frames/ezgif-frame-001.png" type="image/png">
 </head>
 <body>
-    <h1>Checklist</h1>
-    <div style="width:100%; display:flex; justify-content:left;">
-        <ul id="checklist" style="padding:0; width:100%; max-width:600px; margin:0 auto;background-color: #e3e8f0; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
-            <!-- Checklist items will go here -->
-        </ul>
+    <div style="display:grid; justify-items: center; gap: 6px; margin-top: 32px;">
+        <h1>Checklist</h1>
+        <div style="width:100%; display:flex; justify-content:left;">
+            <ul id="checklist" style="padding:0; width:100%; max-width:600px; margin:0 auto;background-color: #e3e8f0; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
+                <!-- Checklist items will go here -->
+            </ul>
+        </div>
+        <input id="new-item-input" type="text" placeholder="Add new item and press Enter" autocomplete="off" />
     </div>
-    <input id="new-item-input" type="text" placeholder="Add new item and press Enter" autocomplete="off" />
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
@@ -42,5 +45,52 @@
         window.firebaseOnValue = onValue;
     </script>
     <script defer src="main.js"></script>
+    <script>
+        /*
+        Simple animated favicon rotator.
+        - Place the 16 frames in /favicon-frames/ (change the path if needed).
+        - Adjust FPS via the "fps" variable below.
+        */
+
+        (function () {
+        const frames = Array.from({ length: 16 }, (_, i) =>
+            `/favicon-frames/ezgif-frame-${String(i + 1).padStart(2, "0")}.png`
+        );
+
+        const fps = 6;                     // animation speed (frames per second)
+        const interval = 1000 / fps;
+
+        // Make sure a <link rel="icon"> exists
+        let link = document.querySelector("link#favicon") ||
+                    document.querySelector("link[rel*='icon']");
+
+        if (!link) {
+            link = document.createElement("link");
+            link.id = "favicon";
+            link.rel = "icon";
+            link.type = "image/png";
+            document.head.appendChild(link);
+        }
+
+        // Preload images to reduce flicker
+        const preload = frames.map(src => { const img = new Image(); img.src = src; return img; });
+
+        let i = 0;
+        function tick() {
+            // Swap favicon href to next frame
+            link.href = frames[i];
+
+            // Some browsers cache aggressively; appending a cache buster can help:
+            // link.href = `${frames[i]}?v=${i}`;
+
+            i = (i + 1) % frames.length;
+        }
+
+        // Start the loop
+        tick();
+        setInterval(tick, interval);
+
+        })();
+    </script>
 </body>
 </html>

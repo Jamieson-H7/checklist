@@ -2,3 +2,13 @@ ul#checklist {
     list-style-type: none;
     padding-left: 0;
 }
+
+#new-item-input {
+    width: 100%;
+    max-width: 600px;
+    padding: 10px;
+    margin-top: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
