@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Checklist</title>
     <link rel="stylesheet" href="styles.css">
-    <link id="favicon" rel="icon" href="/favicon-frames/ezgif-frame-001.png" type="image/png">
+    <link id="favicon" rel="icon" href="about:blank" type="image/png">
 </head>
 <body>
     <div style="display:grid; justify-items: center; gap: 6px; margin-top: 32px;">
@@ -46,51 +46,49 @@
     </script>
     <script defer src="main.js"></script>
     <script>
-        /*
-        Simple animated favicon rotator.
-        - Place the 16 frames in /favicon-frames/ (change the path if needed).
-        - Adjust FPS via the "fps" variable below.
-        */
+    (function () {
+    // Detect "/<repo>/" for GitHub Pages project sites, else "/"
+    const parts = location.pathname.split('/').filter(Boolean);
+    const repo = parts.length ? parts[0] : '';
+    const basePath = repo ? `/${repo}/` : '/';
 
-        (function () {
-        const frames = Array.from({ length: 16 }, (_, i) =>
-            `/favicon-frames/ezgif-frame-${String(i + 1).padStart(2, "0")}.png`
-        );
+    // Frames live under "<basePath>favicon-frames/"
+    const framesDir = `${basePath}favicon-frames/`;
 
-        const fps = 6;                     // animation speed (frames per second)
-        const interval = 1000 / fps;
+    // If your files are ezgif-frame-1.png ... ezgif-frame-16.png (no zero padding)
+    const frameCount = 16;
+    const frames = Array.from({ length: frameCount }, (_, i) =>
+        `${framesDir}ezgif-frame-${String(i + 1).padStart(3, "0")}.png`
+    );
 
-        // Make sure a <link rel="icon"> exists
-        let link = document.querySelector("link#favicon") ||
-                    document.querySelector("link[rel*='icon']");
 
-        if (!link) {
-            link = document.createElement("link");
-            link.id = "favicon";
-            link.rel = "icon";
-            link.type = "image/png";
-            document.head.appendChild(link);
-        }
+    const fps = 30;
+    const interval = 1000 / fps;
 
-        // Preload images to reduce flicker
-        const preload = frames.map(src => { const img = new Image(); img.src = src; return img; });
+    // Ensure a favicon <link> exists
+    let link = document.querySelector("#favicon") || document.querySelector("link[rel*='icon']");
+    if (!link) {
+        link = document.createElement("link");
+        link.id = "favicon";
+        link.rel = "icon";
+        link.type = "image/png";
+        document.head.appendChild(link);
+    }
 
-        let i = 0;
-        function tick() {
-            // Swap favicon href to next frame
-            link.href = frames[i];
+    // Preload to reduce flicker
+    frames.forEach(src => { const img = new Image(); img.src = src; });
 
-            // Some browsers cache aggressively; appending a cache buster can help:
-            // link.href = `${frames[i]}?v=${i}`;
+    let i = 0;
+    function tick() {
+        // Add a cache-buster in case GitHub Pages caches aggressively
+        link.href = `${frames[i]}?v=${i}`;
+        i = (i + 1) % frames.length;
+    }
 
-            i = (i + 1) % frames.length;
-        }
-
-        // Start the loop
-        tick();
-        setInterval(tick, interval);
-
-        })();
+    tick();
+    setInterval(tick, interval);
+    })();
     </script>
+
 </body>
 </html>
