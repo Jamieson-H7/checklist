@@ -17,7 +17,13 @@
         </div>
         <input id="new-item-input" type="text" placeholder="Add new item and press Enter" autocomplete="off" />
     </div>
-    <img src="cut-of-meat_1f969.png" alt="moji of steak!" style="position: absolute; bottom: 0; left: 0; width:2em">
+    <!-- Checkbox to turn steak on and off -->
+    <label style="position: fixed; bottom: 0; right: 0; margin: 1em; background-color: white; padding: 0.5em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); color:black; font-weight: bold; z-index: 1000;">
+        <input type="checkbox" id="steak-toggle" checked/>
+        Show Steak
+    </label>
+    <!-- Steak image -->
+    <img id="STEAK" src="cut-of-meat_1f969.png" alt="moji of steak!" style="position: absolute; bottom: 0; left: 0; width:2em">
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
@@ -46,50 +52,7 @@
         window.firebaseOnValue = onValue;
     </script>
     <script defer src="main.js"></script>
-    <script>
-    (function () {
-    // Detect "/<repo>/" for GitHub Pages project sites, else "/"
-    const parts = location.pathname.split('/').filter(Boolean);
-    const repo = parts.length ? parts[0] : '';
-    const basePath = repo ? `/${repo}/` : '/';
-
-    // Frames live under "<basePath>favicon-frames/"
-    const framesDir = `${basePath}favicon-frames/`;
-
-    // If your files are ezgif-frame-1.png ... ezgif-frame-16.png (no zero padding)
-    const frameCount = 16;
-    const frames = Array.from({ length: frameCount }, (_, i) =>
-        `${framesDir}ezgif-frame-${String(i + 1).padStart(3, "0")}.png`
-    );
-
-
-    const fps = 30;
-    const interval = 1000 / fps;
-
-    // Ensure a favicon <link> exists
-    let link = document.querySelector("#favicon") || document.querySelector("link[rel*='icon']");
-    if (!link) {
-        link = document.createElement("link");
-        link.id = "favicon";
-        link.rel = "icon";
-        link.type = "image/png";
-        document.head.appendChild(link);
-    }
-
-    // Preload to reduce flicker
-    frames.forEach(src => { const img = new Image(); img.src = src; });
-
-    let i = 0;
-    function tick() {
-        // Add a cache-buster in case GitHub Pages caches aggressively
-        link.href = `${frames[i]}?v=${i}`;
-        i = (i + 1) % frames.length;
-    }
-
-    tick();
-    setInterval(tick, interval);
-    })();
-    </script>
-
+    <script src="favicon.js"></script>
+    <script src="steak.js"></script>
 </body>
 </html>
