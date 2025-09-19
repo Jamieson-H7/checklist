@@ -199,6 +199,12 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
                     document.removeEventListener('mousedown', handler);
                 }
             });
+            document.addEventListener('keydown', function handler(ev) {
+                if (ev.key === 'Escape') {
+                    popup.remove();
+                    document.removeEventListener('keypress', handler);
+                }
+            });
         }, 0);
         popup.appendChild(daysInput);
         popup.appendChild(timeInput);
@@ -236,10 +242,12 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
         menu.style.position = 'absolute';
         menu.style.top = `${e.clientY}px`;
         menu.style.left = `${e.clientX}px`;
-        menu.style.background = '#fff';
+        menu.style.background = '#0e2b39ff';
         menu.style.border = '1px solid #ccc';
         menu.style.padding = '4px 12px';
         menu.style.cursor = 'pointer';
+        menu.style.borderRadius = '4px';
+        menu.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
         menu.style.zIndex = 1000;
 
         menu.addEventListener('click', () => {
@@ -421,6 +429,12 @@ function addCheckedListItem(item, skipSave = false, dueDate = null, created = nu
                     document.removeEventListener('mousedown', handler);
                 }
             });
+            document.addEventListener('keydown', function handler(ev) {
+                if (ev.key === 'Escape') {
+                    popup.remove();
+                    document.removeEventListener('keypress', handler);
+                }
+            });
         }, 0);
         popup.appendChild(daysInput);
         popup.appendChild(timeInput);
@@ -452,8 +466,11 @@ function addCheckedListItem(item, skipSave = false, dueDate = null, created = nu
         menu.style.top = `${e.clientY}px`;
         menu.style.left = `${e.clientX}px`;
         menu.style.background = '#fff';
+        menu.style.color = '#000';
         menu.style.border = '1px solid #ccc';
         menu.style.padding = '4px 12px';
+        menu.style.borderRadius = '4px';
+        menu.style.boxShadow = '0 2px 8px rgba(208, 208, 208, 0.15)';
         menu.style.cursor = 'pointer';
         menu.style.zIndex = 1000;
 
