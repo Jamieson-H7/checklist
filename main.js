@@ -347,8 +347,9 @@ function addCheckedListItem(item, skipSave = false, dueDate = null, created = nu
         progressFill.style.right = '0';
         progressBar.style.display = 'inline-block';
         progressBar.title = formatDueDate(dueDate);
-        if (percent === 0) progressFill.style.background = '#f44336';
-        else if (percent < 30) progressFill.style.background = '#ff9800';
+        if (percent < 30) progressFill.style.background = '#6a0a34ff';
+        else if (percent < 50) progressFill.style.background = '#f44336';
+        else if (percent < 65) progressFill.style.background = '#ff9800';
         else progressFill.style.background = '#4caf50';
     }
     if (dueDate) updateProgressBar();
