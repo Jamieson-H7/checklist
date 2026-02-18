@@ -23,7 +23,22 @@ checkedLabel.addEventListener('click', function() {
     checkedList.style.display = (checkedList.style.display === 'none' || checkedList.style.display === '') ? 'block' : 'none';
 });
 
+// Create delete all button
+const deleteAllBtn = document.createElement('button');
+deleteAllBtn.textContent = 'Delete All';
+deleteAllBtn.type = 'button';
+deleteAllBtn.style.marginLeft = '8px';
+deleteAllBtn.style.padding = '4px 8px';
+deleteAllBtn.style.cursor = 'pointer';
+deleteAllBtn.addEventListener('click', function() {
+    if (checkedList.children.length > 0 && confirm('Delete all checked items?')) {
+        checkedList.innerHTML = '';
+        saveChecklistState();
+    }
+});
+
 input.insertAdjacentElement('afterend', checkedList);
+input.insertAdjacentElement('afterend', deleteAllBtn);
 input.insertAdjacentElement('afterend', checkedLabel);
 
 const db = window.firebaseDb;
@@ -268,6 +283,15 @@ function addChecklistItem(item, checked = false, skipSave = false, dueDate = nul
     // Listen for checking
     checkbox.addEventListener('change', function() {
         if (checkbox.checked) {
+            // Trigger confetti when item is checked
+            if (typeof confetti !== 'undefined') {
+                confetti({
+                    particleCount: 500,
+                    spread: 135,
+                    origin: { y: 1 },
+                    startVelocity: 60,
+                });
+            }
             addCheckedListItem(item, false, li.getAttribute('data-due') || null);
             li.remove();
         }
